@@ -12,6 +12,8 @@ The original project had it's java generator. But since that's a learning projec
 
 Update: It took me abot 4 hours to port.
 
+Update 2: Plus some 2 extra hours to make it work like the original script including 10k+ stations for bigger inputs
+
 #### How to generate the data
 
 ```

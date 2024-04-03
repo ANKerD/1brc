@@ -10,6 +10,7 @@ name = "create_measurements"
 path = "src/bin/create_measurements/main.rs"
 
 [dependencies]
+json = "0.12.4"
 rand = "0.8.5"
 rand_distr = "0.4.3"
 
