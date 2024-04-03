@@ -422,19 +422,6 @@ fn main() {
         ("Wellington".to_string(), 12.9),
         ("Whitehorse".to_string(), -0.1),
         ("Wichita".to_string(), 13.9),
-        ("Willemstad".to_string(), 28.0),
-        ("Winnipeg".to_string(), 3.0),
-        ("Wrocław".to_string(), 9.6),
-        ("Xi'an".to_string(), 14.1),
-        ("Yakutsk".to_string(), -8.8),
-        ("Yangon".to_string(), 27.5),
-        ("Yaoundé".to_string(), 23.8),
-        ("Yellowknife".to_string(), -4.3),
-        ("Yerevan".to_string(), 12.4),
-        ("Yinchuan".to_string(), 9.0),
-        ("Zagreb".to_string(), 10.7),
-        ("Zanzibar City".to_string(), 26.0),
-        ("Zürich".to_string(), 9.3)
     ];
 
     let mut f = OpenOptions::new()
