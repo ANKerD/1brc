@@ -72,3 +72,18 @@ Some other build options will be added to increase the binary speed without touc
 | 100m       | 262.96s        | 85.40s        | 51.98s          | 53.16s     | 52.01s    |
 | 1b         | 4306.22        | 747.49s       | 474.06s         | -          | -         |
 
+## 3. Tweak heap allocators + cpu specific compilations
+
+Now testing different heap allocators as suggestted here [https://nnethercote.github.io/perf-book/build-configuration.html](https://nnethercote.github.io/perf-book/build-configuration.html)
+
+First experiment is using `tikv-jemallocator`. A potential performance gain can come from enabling THP (Transparent Huge Pages), but as I am using Mac this is not possible.
+
+| Input size | codegen-units=1+lto fat | tikv-jemallocator | 
+|------------|-------------------------|-------------------|
+| 1k         | 0.49s                   | 0.27s             |
+| 10k        | 0.21s                   | 0.26s             |
+| 100k       | 0.24s                   | 0.23s             |
+| 1m         | 0.73s                   | 0.64s             |
+| 10m        | 5.34s                   | 4.19s             |
+| 100m       | 52.01s                  | 39.51s            |
+| 1b         | -                       |                   |
