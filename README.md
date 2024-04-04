@@ -143,10 +143,11 @@ for line in reader.lines() {
 }
 ```
 
+NVM, the extra 10% performance of PGC are to much to be ignored, adding it to this comparison as well.
 
-| Input size | mimalloc+flags | +HashMap |
-|------------|----------------|----------|
-| 1m         | 0.48s          | 0.21s    |
-| 10m        | 4.0s           | 1.26s    |
-| 100m       | 39s            | 10.21s   |
-| 1b         | 390s           | 103.62s  |
+| Input size | mimalloc+flags | +HashMap | +PGC   |
+|------------|----------------|----------|--------|
+| 1m         | 0.48s          | 0.21s    | 0.15s  |
+| 10m        | 4.0s           | 1.26s    | 0.915s | 
+| 100m       | 39s            | 10.21s   | 8.72s  |
+| 1b         | 390s           | 103.62s  | 89s    |
