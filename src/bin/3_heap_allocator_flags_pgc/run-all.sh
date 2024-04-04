@@ -6,10 +6,11 @@ folder=src/bin/$solution/output
 mkdir -p $folder
 
 rm -rf target
-time cargo build --release
+RUSTFLAGS="-Cprofile-use=./assets/merged.profdata" time cargo build --release
 for i in "${arr[@]}"
 do
     file=$folder/$i.txt
-    command time -o $file.time cargo run --release --bin $solution data/$i.txt > $file
+    RUSTFLAGS="-Cprofile-use=./assets/merged.profdata" command time -o $file.time \
+    cargo run --release --bin $solution data/$i.txt > $file
     echo $i `cat $file.time`
 done
