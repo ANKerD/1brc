@@ -85,7 +85,7 @@ Now testing different heap allocators as suggestted here [https://nnethercote.gi
 ### How to run
 
 ```
-./src/bin/3_heap_allocator_flags_pgc/run-all.sh 2>/dev/null
+./src/bin/3_heap_allocator_flags_pgo/run-all.sh 2>/dev/null
 ```
 
 First experiment is using `tikv-jemallocator`. A potential performance gain can come from enabling THP (Transparent Huge Pages), but as I am using Mac this is not possible.
@@ -104,19 +104,19 @@ Second we tweak the program to use mimalloc as the allocator. As their behavior 
 
 Both allocators share a similar performance so I'll test each one denpending on my code implementation. There's the possibility to use platform specific compilation flags but running this `diff <(rustc --print cfg) <(rustc --print cfg -C target-cpu=native)` showed no difference.
 
-PGC is an advanced technique where we run the code in instrumented mode and create profiles that later can be used as input to ther compiler. I'll use this technique now, but I don't like the idea of implementing it into my pipeline right now at least not before I start getting my hands dirty with the code. More details here [https://doc.rust-lang.org/rustc/profile-guided-optimization.html](https://doc.rust-lang.org/rustc/profile-guided-optimization.html)
+PGO is an advanced technique where we run the code in instrumented mode and create profiles that later can be used as input to ther compiler. I'll use this technique now, but I don't like the idea of implementing it into my pipeline right now at least not before I start getting my hands dirty with the code. More details here [https://doc.rust-lang.org/rustc/profile-guided-optimization.html](https://doc.rust-lang.org/rustc/profile-guided-optimization.html)
 ```
 rm -rf /tmp/pgo-data
 RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build --release --target=aarch64-apple-darwin
-./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/1m.txt
-./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/10m.txt
-./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/100m.txt
+./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgo ./data/1m.txt
+./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgo ./data/10m.txt
+./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgo ./data/100m.txt
 ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-profdata merge -o /tmp/pgo-data/merged.profdata /tmp/pgo-data
 RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release --target=aarch64-apple-darwin
-time ./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/1b.txt
+time ./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgo ./data/1b.txt
 ```
 
-| Input size | tikv-jemallocator | +PGC     | mimalloc | +PGC     | mimalloc+flags |
+| Input size | tikv-jemallocator | +PGO     | mimalloc | +PGO     | mimalloc+flags |
 |------------|-------------------|----------|----------|----------| ---------------|
 | 1m         | 0.64s             | 0.412s   | 0.65s    | 0.404s   | 0.48s          |
 | 10m        | 4.19s             | 3.8s     | 4.14s    | 3.789s   | 4.0s           |
@@ -125,7 +125,7 @@ time ./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/1b.
 
 For the record, I noticed some performance loss when removing the power cable and running just on battery so from now on every benchmark will be run with the cable connected.
 
-Keeping all the above compile-time optimizations except for PGC and on top of that taking the following steps allowed me to cut runtime significantly.
+Keeping all the above compile-time optimizations except for PGO and on top of that taking the following steps allowed me to cut runtime significantly.
 
 1. replacing the data structure from BTreeMap to HashMap
 2. use itertools to sort the keys.
@@ -143,9 +143,9 @@ for line in reader.lines() {
 }
 ```
 
-NVM, the extra 10% performance of PGC are to much to be ignored, adding it to this comparison as well.
+NVM, the extra 10% performance of PGO are to much to be ignored, adding it to this comparison as well.
 
-| Input size | mimalloc+flags | +HashMap | +PGC   |
+| Input size | mimalloc+flags | +HashMap | +PGO   |
 |------------|----------------|----------|--------|
 | 1m         | 0.48s          | 0.21s    | 0.15s  |
 | 10m        | 4.0s           | 1.26s    | 0.915s | 

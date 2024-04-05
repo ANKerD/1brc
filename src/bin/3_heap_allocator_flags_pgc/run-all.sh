@@ -1,7 +1,7 @@
 # declare -a arr=("1k" "10k" "100k" "1m" "10m" "100m" "1b")
 declare -a arr=("1m" "10m" "100m" "1b")
 
-solution=3_heap_allocator_flags_pgc
+solution=3_heap_allocator_flags_pgo
 folder=src/bin/$solution/output
 mkdir -p $folder
 
