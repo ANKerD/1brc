@@ -151,3 +151,17 @@ NVM, the extra 10% performance of PGO are to much to be ignored, adding it to th
 | 10m        | 4.0s           | 1.26s    | 0.915s | 
 | 100m       | 39s            | 10.21s   | 8.72s  |
 | 1b         | 390s           | 103.62s  | 89s    |
+
+## 4. Optmize data structures
+
+The hashing for the stdlib trades off performaance for security as having a "weak" hashing policy can make the system vulnerable do DOS (Denial of Service) attacks if a attacker can force collisions to degrade applications performance. As I'm not processing user input but my own randomly generated data, that type of safety is not my concern.
+
+I used FxHashMap which has the weakest hashing with the fastest performance.
+
+// TODO run and write FxMap performance.
+
+### How to run
+
+```
+./src/bin/3_heap_allocator_flags_pgo/run-all.sh 2>/dev/null
+```
