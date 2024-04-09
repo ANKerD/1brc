@@ -67,21 +67,22 @@ fn main() {
         station[3] = station[3] + 1;
     }
 
-    // let mut hlds = vec![];
+    let mut hlds = vec![];
 
-    // for i in 0..8 {
-    //     let t = thread::spawn(move || {
-    //         (move |j: i32| {
-    //             println!("{}", j);
-    //             return Box::new([j])
-    //         })(i);   
-    //     });
-    //     hlds.push(t);
-    // }
+    for i in 0..8 {
+        let worker = move |j: i32| {
+            println!("{}", j);
+            return Box::new([j])
+        };
+        let t = thread::spawn(move || {
+            worker(i);   
+        });
+        hlds.push(t);
+    }
 
-    // for t in hlds {
-    //     _ = t.join();
-    // }
+    for t in hlds {
+        _ = t.join();
+    }
 
     for key in map.keys().sorted() {
         let [min, max, sum, count] = map[key];
