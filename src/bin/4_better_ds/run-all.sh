@@ -6,7 +6,7 @@ folder=src/bin/$solution/output
 mkdir -p $folder
 
 rm -rf target
-time cargo build --release
+time cargo build --release --bin 4_better_ds
 for i in "${arr[@]}"
 do
     file=$folder/$i.txt

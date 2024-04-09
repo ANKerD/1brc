@@ -158,10 +158,19 @@ The hashing for the stdlib trades off performaance for security as having a "wea
 
 I used FxHashMap which has the weakest hashing with the fastest performance.
 
-// TODO run and write FxMap performance.
+| Input size | base   | FxHashMap | +PGO   |
+|------------|--------|-----------|--------|
+| 1m         | 0.13s  | 0.13s     | 0.15s  |
+| 10m        | 1.01s  | 0.93s     | 0.915s | 
+| 100m       | 10.59s | 9.29s     | 8.72s  |
+| 1b         | 99.24s | 91.56s    | 89s    |
+
+I tried using a haspmap of i128 and squeeze all the for variables into i using 16 bits for each min/max, 32 bits for measures count and 64 bit for the toal sum. I used an offset for min/values to simplify its calculations without relying on negative values. 
+
+To avoid floating point operations I converted the measures to int since by definition there'll be only on number after the dot and I just need to divide the values by 10 before calculating the mean. Besides making the code a little bit performant, I noticed mmy program was suffering from floating point imprecisions some stations showed a `0.1` discrepancy.
 
 ### How to run
 
 ```
-./src/bin/3_heap_allocator_flags_pgo/run-all.sh 2>/dev/null
+./src/bin/4_better_ds/run-all.sh 2>/dev/null
 ```
