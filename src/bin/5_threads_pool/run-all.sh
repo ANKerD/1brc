@@ -1,12 +1,12 @@
 # declare -a arr=("1k" "10k" "100k" "1m" "10m" "100m" "1b")
 declare -a arr=("1m" "10m" "100m" "1b")
 
-solution=4_better_ds
+solution=5_threads_pool
 folder=src/bin/$solution/output
 mkdir -p $folder
 
 rm -rf target
-time cargo build --release --bin 4_better_ds
+time cargo build --release --bin 5_threads_pool
 for i in "${arr[@]}"
 do
     file=$folder/$i.txt
