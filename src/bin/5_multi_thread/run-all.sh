@@ -1,11 +1,11 @@
-# declare -a arr=("10" "100" "1k" "10k" "100k" "1m" "10m" "100m" "1b")
-declare -a arr=("1m" "10m" "100m" "1b")
+declare -a arr=("10" "100" "1k" "10k" "100k" "1m" "10m" "100m" "1b")
+# declare -a arr=("1m" "10m" "100m" "1b")
 
 solution=5_multi_thread
 folder=src/bin/$solution/output
 mkdir -p $folder
 
-rm -rf target
+# rm -rf target
 time cargo build --release --bin $solution
 date '+%Y-%m-%dT%H:%M:%S'
 for i in "${arr[@]}"
