@@ -175,14 +175,25 @@ To avoid floating point operations I converted the measures to int since by defi
 ./src/bin/4_better_ds/run-all.sh 2>/dev/null
 ```
 
-## 5. Thread pool
+## 5. Multi threads
 
 It's time to think about all the CPUs the machine has to offer. I'll start creating a worker pool for each CPU and leave the main thread read rows in chunks;
 
-First attempt was to try builtin `sync::mpsc` but it has so many sharps edges to the point I gave up and decided to try crossbeam channel as thread communication solution.
+First attempt was to try builtin `sync::mpsc` but it has so many sharps edges to the point I gave up and decided to try crossbeam channel as thread communication solution. My first implementation had a very degraded performance usually 10x worse for small inputs and about 3~4x slower for the 1BR. I made some optimizations trying to mitigate the amount of time spent by copying thing through threads.
+
+I haven't been able to go beyond my previous record and I assume it's because the bottleneck is on the input not the processing. Making the reader thread use `try_send()` (non-blocking) over `send()` had a significant performance improvement.
+
+Apparently spawning a worker thread for each CPU isn't that optimal at this point. I ran the code with just 1 worker thread and had the best result than running with all cpus or even 2 threads per CPU. Looking in retrospect, this makes sense as I have a single thread writing to the channel a just one consumer.
+
+| Input size | Base   | Naive thread | try_send 8 thread | 1 thread  | +PGO  |
+|------------|--------|--------------|-------------------|-----------|-------|
+| 1m         | 0.13s  | 1.12         | 0.62s             | 0.64s     | 0.13s |
+| 10m        | 0.93s  | 3.0          | 1.22s             | 0.93s     | 0.75s |
+| 100m       | 9.29s  | 30.2         | 9.73s             | 7.51s     | 7.12s |
+| 1b         | 91.56s | 300.0s       | 118.86            | 74.09s    | 71s   |
 
 ### How to run
 
 ```
-./src/bin/5_threads_pool/run-all.sh 2>/dev/null
+./src/bin/5_multi_thread/run-all.sh 2>/dev/null
 ```
