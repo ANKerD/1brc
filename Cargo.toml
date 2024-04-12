@@ -10,8 +10,10 @@ name = "create_measurements"
 path = "src/bin/create_measurements/main.rs"
 
 [dependencies]
+mimalloc = "0.1.39"
 rand = "0.8.5"
 rand_distr = "0.4.3"
+tikv-jemallocator = "0.5.4"
 
 [profile.release]
 codegen-units = 1
