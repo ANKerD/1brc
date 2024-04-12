@@ -65,8 +65,8 @@ The results may vary as the benchmarks were ran while tens of chrome tabs were o
 Some other build options will be added to increase the binary speed without touching the code.
 
 1. Set codegen-units. This will slow down compilation but allows the compiler to better optimize.
-2. Set LNO to `thin`, this decreases binary size and promises 10~20% better runtime speeds.
-3. Set LNO to `fat`.
+2. Set LTO to `thin`, this decreases binary size and promises 10~20% better runtime speeds.
+3. Set LTO to `fat`.
 
 | Input size | Naive solution | Release Build | codegen-units=1 | lto = thin | lto = fat |
 |------------|----------------|---------------|-----------------|------------|-----------|
@@ -193,6 +193,16 @@ Replacing the `String` with a `Vec<u8>` as the key fot the stations gave me good
 | 10m        | 0.93s  | 3.0          | 1.22s             | 0.93s     | 0.75s |
 | 100m       | 9.29s  | 30.2         | 9.73s             | 7.51s     | 7.12s |
 | 1b         | 91.56s | 300.0s       | 118.86            | 74.09s    | 71s   |
+
+The bottleneck was in a single thread reading and fanning out the lines through channels to other threads. I changed the program to spawn many threads and set each one in charge of a slice of the file. Each thread read a chunk of data and parse it to text/measure values until the end their partition ends. This required careful manipulation of each partition especially when the measure lied in between each partition. I tested with smaller chunk sizes (around a 1k) and bigger chunk sizes (about 64M) and this later approach was faster but the first had good results without slowing down my laptop. The best result were in the 16 threads range with reasonable chunk size size (4MB).
+
+| Input size | Base   | 8th cnk=1k | 8th cnk=4k | 8th cnk=4m  | 16th cnk=4m | 16th cnk=64m | 128th cnk=64m | PGO    |
+|------------|--------|------------|------------|-------------|-------------|--------------|---------------|--------|
+| 1m         | 0.64s  | 0.26s      | 0.20s      | 0.16s       | 0.49s       | 0.50s        | 0.50s         | 0.24s  |
+| 10m        | 0.93s  | 0.77s      | 0.43s      | 0.33s       | 0.40s       | 0.62s        | 0.62s         | 0.16s  |
+| 100m       | 7.51s  | 5.64s      | 3.23s      | 1.85s       | 2.02s       | 2.54s        | 2.06s         | 1.35s  |
+| 1b         | 74.09s | 32.94s     | 31.81s     | 17.32s      | 16.88s      | 16.88s       | 19.79s        | 15.99s |
+
 
 ### How to run
 

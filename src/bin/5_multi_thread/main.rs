@@ -8,40 +8,12 @@ use std::{ env, fs::File, io::{stdout, Read, Seek, SeekFrom, Write}, thread};
 use itertools::Itertools;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-const THREAD_COUNT: u64 = 2;
-// const CHUNK_SIZE: u64 = 1024 * 1024 * 4; // 4 MB
-const CHUNK_SIZE: u64 = 10; // test
+const THREAD_COUNT: usize = 16;
+const CHUNK_SIZE: u64 = 1024 * 1024 * 4;
 
-fn v8_as_text(arr: &Vec<u8>) {
-    let _ = stdout().write(arr);
-    println!("");
-}
-
-#[inline(always)]
-fn parse_measure(txt: &Vec<u8>, index: &usize) -> i64 {
-    let mut ans: i64 = 0;
-    let mut neg= false;
-    match txt[index+1] == b'-' {
-        true => {
-            neg = true;
-        }
-        false => {
-            ans = (txt[index+1] - b'0').into();
-        }
-    }
-    for i in (index+2)..(txt.len()-1) {
-        let c = txt[i];
-        if c != b'.' {
-            let d: i64 = (c - b'0').into();
-            ans = ans * 10 + d;
-        }
-    }
-    if neg {
-        return -ans as i64;
-    } else {
-        return ans as i64;
-    }
-}
+// fn v8_as_text(arr: &Vec<u8>) {
+//     let _ = stdout().write(arr);
+// }
 
 type Answer = FxHashMap::<Vec<u8>, [i64; 4]>;
 
@@ -51,72 +23,77 @@ fn main() {
     if args.len() != 2 {
         panic!("Wrong parameters provided")
     }
-    // println!("fredo fred");
     
     let filepath = args[1].trim().to_owned();
-    // let file = File::open(filepath).unwrap();
-    // let mut reader = BufReader::new(file);
-
-    // let (data_sender, data_receiver): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = bounded(10000);
     let (answer_sender, answer_receiver): (Sender<Answer>, Receiver<Answer>) = bounded(0);
-    let mut h = vec![];
-    for _ in 0..THREAD_COUNT {
-        let (data_sender, data_receiver): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = bounded(10000);
-        let sender = answer_sender.clone();
-        h.push(data_sender);
-        let _ = thread::spawn(move || {
-            let mut map = Answer::with_capacity_and_hasher(10000, Default::default());
-            while let Ok(line) = data_receiver.recv() {
-                // let mut key: u128 = 0;
-                let mut i = 0; 
-                while line[i] != b';'{
-                    i += 1;
-                }
-                let v = parse_measure(&line, &i);
-                
-                let station = map.entry(line[0..i].to_vec()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
-                station[0] = station[0].min(v);
-                station[1] = station[1].max(v);
-                station[2] = station[2] + v;
-                station[3] = station[3] + 1;
-            }
-
-            let _ = sender.send(map);
-            drop(sender);
-        });
-    }
     
-    // let mut buf = vec![];
-    // while let Ok(l) = reader.read_until(b'\n', &mut buf) {
-    //     if l == 0 {
-    //         break;
-    //     }
-    //     let _ = data_sender.try_send(buf.clone());
-    //     buf.clear();
-    // };
-    // drop(data_sender);
-
     for j in 0..THREAD_COUNT {
         let fp = filepath.clone();
-        let worker = move |i| { 
+        let sender = answer_sender.clone();
+        let worker = move |thread_id| {
+            let mut map = Answer::with_capacity_and_hasher(10000, Default::default());
+            
             let mut f = File::open(fp.clone()).unwrap();
-            let file_size = f.metadata().unwrap().len();
-            let start = file_size / THREAD_COUNT * i;
-            let end = if i+1 == THREAD_COUNT{ file_size } else {file_size / THREAD_COUNT * (i+1)};
-            println!("{start} {end} {file_size}");
-            let seek = f.seek(SeekFrom::Start(start)).unwrap();
+            let file_size = f.metadata().unwrap().len() as usize;
+            let start: usize = file_size / THREAD_COUNT * thread_id;
+            let end: usize = if thread_id+1 == THREAD_COUNT{ file_size } else {file_size / THREAD_COUNT * (thread_id+1)};
+            // println!("1. {start} {end} {file_size} {thread_id}");
+            
+            let _ = f.seek(SeekFrom::Start(start.try_into().unwrap())).unwrap();
             let mut buf = vec![0_u8; CHUNK_SIZE.try_into().unwrap()];
-            // let mut buf = vec![];
-            loop {
-                let n = f.read(&mut buf).unwrap();
-                if n == 0 { break; }
-                println!("{buf:?}");
-                v8_as_text(&buf);
-                // println!("{pos} {file_size} {i} {}", b'\n');
-                // pos += CHUNK_SIZE;
-                
-                println!("\n");
+            let mut cnt = 0;
+
+            cnt += f.read(&mut buf).unwrap();
+
+            let mut index = 0;
+            if thread_id != 0 {
+                while buf[index] != b'\n' {
+                    index += 1;
+                }
+                index += 1;
             }
+            let mut txt_buffer: Vec<u8> = Vec::with_capacity(30);
+            while start + cnt < end {
+                let mut measure: i32 = 0;
+                let mut semicolon = false;
+                let mut neg = false;
+                loop {
+                    let c = buf[index];
+                    // println!("[{thread_id}] index={index} c={c} {}", c as char);
+                    
+                    if c == b';' {
+                        semicolon = true
+                    } else if c == b'-' { 
+                        neg = true;
+                    } else if c == b'.' || c == b'\n' { 
+                    } else if !semicolon {
+                        txt_buffer.push(c);
+                    } else if semicolon {
+                        measure = measure * 10 + (c - b'0') as i32;
+                    } else {
+                        println!("bad state reading c={c}");
+                    }
+                    
+                    index += 1;
+                    
+                    if index >= buf.len() {
+                        cnt += f.read(&mut buf).unwrap();
+                        index = 0;
+                    }
+                    if c == b'\n' {break;}
+                }
+                if neg { measure = -measure; }
+
+                // TODO review this clone
+                let station = map.entry(txt_buffer.clone()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
+                station[0] = station[0].min(measure as i64);
+                station[1] = station[1].max(measure as i64);
+                station[2] = station[2] + measure as i64;
+                station[3] = station[3] + 1;
+                txt_buffer.clear()
+            }
+            sender.send(map).unwrap();
+            drop(sender);
         };
         let _ = thread::spawn(move || {worker(j)});
     }
