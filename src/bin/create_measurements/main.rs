@@ -21,7 +21,7 @@ fn main() {
     let filepath = args[2].trim();
     
 
-    let stations =  [    
+    let stations_template =  [    
         ("Abha".to_string(), 18.0),
         ("Abidjan".to_string(), 26.0),
         ("Abéché".to_string(), 29.4),
@@ -444,10 +444,25 @@ fn main() {
         .open(filepath)
         .unwrap();
 
+    let mut stations;
+        stations = Vec::new();
+        for (name, mean) in stations_template.iter() {
+            if size >= usize::pow(10, 6) {
+                for i in 0..25 {
+                    // name = name.push_str(&i.to_string());
+                    stations.push( (format!("{}{}", name, i), *mean) );
+                }
+            } else {
+                stations.push( (name.clone(), *mean) );
+            }
+        }
+    
     let mut rng = rand::thread_rng();
     for _i in 0..size {
         let index = rng.gen_range(0..stations.len());
-        let data = format!("{};{}\n", stations[index].0, measure(stations[index].1));
+        let (station_name, value) =  stations.get(index).unwrap();
+        
+        let data = format!("{};{}\n", station_name, measure(*value));
         f.write_all(data.as_bytes()).expect("Unable to write");
     }
 }
