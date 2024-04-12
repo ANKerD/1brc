@@ -46,6 +46,12 @@ Running cargo with `--release` falg has dramatically cut the running time of the
 
 The results may vary as the benchmarks were ran while tens of chrome tabs were open along with vs code and slack running as an app.
 
+### How to run
+
+```
+./src/bin/2_optimize_build/run-all.sh 2>/dev/null
+```
+
 | Input size | Naive solution | Release Build | + codegen-units = 1 |
 |------------|----------------|---------------|---------------------|
 | 1k         | 0.25s          | 0.66s         | 0.82s               |
@@ -76,6 +82,12 @@ Some other build options will be added to increase the binary speed without touc
 
 Now testing different heap allocators as suggestted here [https://nnethercote.github.io/perf-book/build-configuration.html](https://nnethercote.github.io/perf-book/build-configuration.html)
 
+### How to run
+
+```
+./src/bin/3_heap_allocator_flags_pgc/run-all.sh 2>/dev/null
+```
+
 First experiment is using `tikv-jemallocator`. A potential performance gain can come from enabling THP (Transparent Huge Pages), but as I am using Mac this is not possible.
 
 Second we tweak the program to use mimalloc as the allocator. As their behavior and performance might change accordingly to the shape of the program, I'm considering changing the `run-all.sh` script to test both in every workload run;
@@ -87,21 +99,21 @@ Second we tweak the program to use mimalloc as the allocator. As their behavior 
 | 100k       | 0.24s                   | 0.23s             | 0.33s    |
 | 1m         | 0.73s                   | 0.64s             | 0.65s    |
 | 10m        | 5.34s                   | 4.19s             | 4.14s    |
-| 100m       | 52.01s                  | 39.51s            | 40.16s   |
+| 100m       | 51.01s                  | 39.51s            | 40.16s   |
 | 1b         | -                       | 405.17s           | 410.24s  |
 
 Both allocators share a similar performance so I'll test each one denpending on my code implementation. There's the possibility to use platform specific compilation flags but running this `diff <(rustc --print cfg) <(rustc --print cfg -C target-cpu=native)` showed no difference.
 
 PGC is an advanced technique where we run the code in instrumented mode and create profiles that later can be used as input to ther compiler. I'll use this technique now, but I don't like the idea of implementing it into my pipeline right now at least not before I start getting my hands dirty with the code. More details here [https://doc.rust-lang.org/rustc/profile-guided-optimization.html](https://doc.rust-lang.org/rustc/profile-guided-optimization.html)
-
 ```
 rm -rf /tmp/pgo-data
 RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build --release --target=aarch64-apple-darwin
-./target/aarch64-apple-darwin/release/3 ./data/1m.txt
-./target/aarch64-apple-darwin/release/3 ./data/10m.txt
-./target/aarch64-apple-darwin/release/3 ./data/100m.txt
+./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/1m.txt
+./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/10m.txt
+./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/100m.txt
 ~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-profdata merge -o /tmp/pgo-data/merged.profdata /tmp/pgo-data
 RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release --target=aarch64-apple-darwin
+time ./target/aarch64-apple-darwin/release/3_heap_allocator_flags_pgc ./data/1b.txt
 ```
 
 | Input size | tikv-jemallocator | +PGC     | mimalloc | +PGC     | mimalloc+flags |
@@ -112,3 +124,29 @@ RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release --
 | 1b         | 405.17s           | 390.291s | 410.24s  | 380s     | 390s           |
 
 For the record, I noticed some performance loss when removing the power cable and running just on battery so from now on every benchmark will be run with the cable connected.
+
+Keeping all the above compile-time optimizations except for PGC and on top of that taking the following steps allowed me to cut runtime significantly.
+
+1. replacing the data structure from BTreeMap to HashMap
+2. use itertools to sort the keys.
+3. Better handle strings and map keys
+
+```rust
+let mut map: HashMap<String, (f32, f32, f32, i32)> = HashMap::new();
+for line in reader.lines() {
+    let liner = line.unwrap();
+    let lines: Vec<&str> = liner.split(";").collect();
+    let v = lines[1].parse::<f32>().unwrap(); 
+    
+    let station = map.entry(lines[0].to_string()).or_insert( (f32::MAX, f32::MIN, 0.0, 0));
+    [...]
+}
+```
+
+
+| Input size | mimalloc+flags | +HashMap |
+|------------|----------------|----------|
+| 1m         | 0.48s          | 0.21s    |
+| 10m        | 4.0s           | 1.26s    |
+| 100m       | 39s            | 10.21s   |
+| 1b         | 390s           | 103.62s  |
