@@ -185,6 +185,8 @@ I haven't been able to go beyond my previous record and I assume it's because th
 
 Apparently spawning a worker thread for each CPU isn't that optimal at this point. I ran the code with just 1 worker thread and had the best result than running with all cpus or even 2 threads per CPU. Looking in retrospect, this makes sense as I have a single thread writing to the channel a just one consumer.
 
+Replacing the `String` with a `Vec<u8>` as the key fot the stations gave me good results. Once randomly I got times as low as `38s` but I'm not able to reproduce that consistently.
+
 | Input size | Base   | Naive thread | try_send 8 thread | 1 thread  | +PGO  |
 |------------|--------|--------------|-------------------|-----------|-------|
 | 1m         | 0.13s  | 1.12         | 0.62s             | 0.64s     | 0.13s |
