@@ -4,10 +4,9 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate fxhash;
 use fxhash::FxHashMap;
-use std::{ env, fs::File, io::{BufRead, BufReader}, thread, time::Duration};
-use itertools::Itertools;
+use std::{ env, fs::File, io::{BufRead, BufReader, Lines}, thread, time::Duration};
+use itertools::{Chunk, Itertools};
 use crossbeam_channel::{bounded, Receiver, Sender};
-
 
 const CPU_COUNT: usize = 8;
 
@@ -47,6 +46,7 @@ fn parse_measure(txt: &str) -> i64 {
 }
 
 type Answer = FxHashMap<String, [i64; 4]>;
+type ChunkData<'a> = Chunk<'a, Lines<BufReader<File>>>;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -61,24 +61,29 @@ fn main() {
 
     let mut handlers = vec![];
     for _ in 0..CPU_COUNT {
-        let (data_sender, data_receiver): (Sender<Vec<String>>, Receiver<Vec<String>>) = bounded(CPU_COUNT);
-        let (answer_sender, answer_receiver): (Sender<Answer>, Receiver<Answer>) = bounded(CPU_COUNT);
+        let (data_sender, data_receiver): (Sender<Result<String, _>>, Receiver<Result<String, _>>) = bounded(CPU_COUNT);
+        // let (data_sender, data_receiver): (Sender<String>, Receiver<String>) = bounded(CPU_COUNT);
+        let (answer_sender, answer_receiver): (Sender<Box<Answer>>, Receiver<Box<Answer>>) = bounded(CPU_COUNT);
     
         let t = thread::spawn(move || {
-            let mut map: Answer = Answer::with_capacity_and_hasher(10000, Default::default());
-            while let Ok(data) = data_receiver.recv_timeout(Duration::from_millis(100)) {
-                for line in data {
-                    let l: Vec<&str> = line.split(";").collect();
-                    let v = parse_measure(l[1]);
-                    
-                    let station = map.entry(l[0].to_string()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
-                    station[0] = station[0].min(v);
-                    station[1] = station[1].max(v);
-                    station[2] = station[2] + v;
-                    station[3] = station[3] + 1;
-                }
+            let mut map = Box::new(Answer::with_capacity_and_hasher(10000, Default::default()));
+            while let Ok(line) = data_receiver.recv_timeout(Duration::from_millis(100)) {
+                let liner = line.unwrap();
+                let l: Vec<&str> = liner.split(";").collect();
+                let v = parse_measure(l[1]);
+                
+                let station = map.entry(l[0].to_string()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
+                station[0] = station[0].min(v);
+                station[1] = station[1].max(v);
+                station[2] = station[2] + v;
+                station[3] = station[3] + 1;
             }
-            let _ = answer_sender.send(map);
+
+            // let _ = answer_sender.send(map);
+            // while let Ok(chunk) = data_receiver.recv_timeout(Duration::from_millis(100)) {
+            //     let data = chunk.map(|l| {l.unwrap()}).collect::<Vec<String>>();
+            //     println!("{:?}", data);
+            // }
         });
         handlers.push((t, data_sender, answer_receiver));
     }
@@ -86,15 +91,19 @@ fn main() {
     // let mut map: FxHashMap<String, [i64; 4]> = FxHashMap::with_capacity_and_hasher(10000, Default::default());
     let mut i = 0;
     for chunk in &reader.lines().chunks(128) {
-        let data = chunk.map(|l| {l.unwrap()}).collect::<Vec<String>>();
-        let (_, data_sender, _) = &handlers[i];
-        let _ = data_sender.send(data).unwrap();
-        i = (i+1) % 8;
+        for l in chunk.enumerate() {
+            // Chunk<Lines<BufReader<File>>>
+            // print_type_of(&chunk);
+            // println!("{:?}", chunk.type_id());
+            // let data = chunk.map(|l| {l.unwrap()}).collect::<Vec<String>>();
+            let (_, data_sender, _) = &handlers[i];
+            let _ = data_sender.send(l.1).unwrap();
+            i = (i+1) % 8;
+        }
     }
 
     let map: Answer = Answer::with_capacity_and_hasher(10000, Default::default());
     for (t, _, answer_receiver) in handlers {
-        // drop(tx);
         t.join().unwrap();
         let partial = answer_receiver.recv().unwrap();
         for key in map.keys() {
