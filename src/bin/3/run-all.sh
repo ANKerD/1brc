@@ -1,4 +1,5 @@
-declare -a arr=("1k" "10k" "100k" "1m" "10m" "100m" "1b")
+# declare -a arr=("1k" "10k" "100k" "1m" "10m" "100m" "1b")
+declare -a arr=("1m" "10m" "100m" "1b")
 
 solution=3
 folder=src/bin/$solution/output

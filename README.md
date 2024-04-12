@@ -78,12 +78,37 @@ Now testing different heap allocators as suggestted here [https://nnethercote.gi
 
 First experiment is using `tikv-jemallocator`. A potential performance gain can come from enabling THP (Transparent Huge Pages), but as I am using Mac this is not possible.
 
-| Input size | codegen-units=1+lto fat | tikv-jemallocator | 
-|------------|-------------------------|-------------------|
-| 1k         | 0.49s                   | 0.27s             |
-| 10k        | 0.21s                   | 0.26s             |
-| 100k       | 0.24s                   | 0.23s             |
-| 1m         | 0.73s                   | 0.64s             |
-| 10m        | 5.34s                   | 4.19s             |
-| 100m       | 52.01s                  | 39.51s            |
-| 1b         | -                       |                   |
+Second we tweak the program to use mimalloc as the allocator. As their behavior and performance might change accordingly to the shape of the program, I'm considering changing the `run-all.sh` script to test both in every workload run;
+
+| Input size | codegen-units=1+lto fat | tikv-jemallocator | mimalloc |
+|------------|-------------------------|-------------------|----------|
+| 1k         | 0.49s                   | 0.27s             | 0.32s    |
+| 10k        | 0.21s                   | 0.26s             | 0.21s    |
+| 100k       | 0.24s                   | 0.23s             | 0.33s    |
+| 1m         | 0.73s                   | 0.64s             | 0.65s    |
+| 10m        | 5.34s                   | 4.19s             | 4.14s    |
+| 100m       | 52.01s                  | 39.51s            | 40.16s   |
+| 1b         | -                       | 405.17s           | 410.24s  |
+
+Both allocators share a similar performance so I'll test each one denpending on my code implementation. There's the possibility to use platform specific compilation flags but running this `diff <(rustc --print cfg) <(rustc --print cfg -C target-cpu=native)` showed no difference.
+
+PGC is an advanced technique where we run the code in instrumented mode and create profiles that later can be used as input to ther compiler. I'll use this technique now, but I don't like the idea of implementing it into my pipeline right now at least not before I start getting my hands dirty with the code. More details here [https://doc.rust-lang.org/rustc/profile-guided-optimization.html](https://doc.rust-lang.org/rustc/profile-guided-optimization.html)
+
+```
+rm -rf /tmp/pgo-data
+RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build --release --target=aarch64-apple-darwin
+./target/aarch64-apple-darwin/release/3 ./data/1m.txt
+./target/aarch64-apple-darwin/release/3 ./data/10m.txt
+./target/aarch64-apple-darwin/release/3 ./data/100m.txt
+~/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-profdata merge -o /tmp/pgo-data/merged.profdata /tmp/pgo-data
+RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release --target=aarch64-apple-darwin
+```
+
+| Input size | tikv-jemallocator | +PGC     | mimalloc | +PGC     | mimalloc+flags |
+|------------|-------------------|----------|----------|----------| ---------------|
+| 1m         | 0.64s             | 0.412s   | 0.65s    | 0.404s   | 0.48s          |
+| 10m        | 4.19s             | 3.8s     | 4.14s    | 3.789s   | 4.0s           |
+| 100m       | 39.51s            | 37.167s  | 40.16s   | 37.17    | 39s            |
+| 1b         | 405.17s           | 390.291s | 410.24s  | 380s     | 390s           |
+
+For the record, I noticed some performance loss when removing the power cable and running just on battery so from now on every benchmark will be run with the cable connected.
