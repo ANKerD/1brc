@@ -8,8 +8,6 @@ use std::{ env, fs::File, io::{BufRead, BufReader}, thread};
 use itertools::Itertools;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-const CPU_COUNT: usize = 1;
-
 #[inline(always)]
 fn eval_char(c: char) -> i64 {
     match c {
@@ -28,14 +26,15 @@ fn eval_char(c: char) -> i64 {
 }
 
 #[inline(always)]
-fn parse_measure(txt: &str) -> i64 {
-    let mut ans = 0;
+fn parse_measure(txt: &Vec<u8>, i: usize) -> i64 {
+    let mut ans: i64 = 0;
     let mut neg= false;
-    for c in txt.chars() {
-        if c == '-' {
+    for j in i..txt.len() {
+        let c = txt[i];
+        if c == b'-' {
             neg = true
-        } else if c != '.' {
-            ans = ans * 10 + eval_char(c);
+        } else if c != b'.' {
+            ans = (ans * 10).wrapping_add((c - b'0').into());
         }
     }
     if neg {
@@ -44,8 +43,6 @@ fn parse_measure(txt: &str) -> i64 {
         return ans as i64;
     }
 }
-
-type Answer = FxHashMap<String, [i64; 4]>;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -57,54 +54,50 @@ fn main() {
     
     let filepath = args[1].trim();
     let file = File::open(filepath).unwrap();
-    let reader = BufReader::new(file);
+    let mut reader = BufReader::new(file);
 
-    let (data_sender, data_receiver): (Sender<Result<String, _>>, Receiver<Result<String, _>>) = bounded(10000);
-    let (answer_sender, answer_receiver): (Sender<Box<Answer>>, Receiver<Box<Answer>>) = bounded(CPU_COUNT);
-    for _ in 0..CPU_COUNT {
-        let receiver = data_receiver.clone();
-        let sender = answer_sender.clone();
-        let _ = thread::spawn(move || {
-            let mut map = Box::new(Answer::with_capacity_and_hasher(10000, Default::default()));
-            while let Ok(line) = receiver.recv() {
-                let liner = line.unwrap();
-                // println!("thread line {liner}");
-                let l: Vec<&str> = liner.split(";").collect();
-                let v = parse_measure(l[1]);
-                
-                let station = map.entry(l[0].to_string()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
-                station[0] = station[0].min(v);
-                station[1] = station[1].max(v);
-                station[2] = station[2] + v;
-                station[3] = station[3] + 1;
+    // let (data_sender, data_receiver): (Sender<Result<String, _>>, Receiver<Result<String, _>>) = bounded(10000);
+    let (data_sender, data_receiver): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = bounded(10000);
+    let (answer_sender, answer_receiver): (Sender<u32>, Receiver<u32>) = bounded(0);
+    let _ = thread::spawn(move || {
+        let mut map = FxHashMap::<Vec<u8>, [i64; 4]>::with_capacity_and_hasher(10000, Default::default());
+        while let Ok(line) = data_receiver.recv() {
+            // let mut key: u128 = 0;
+            let mut i = 0; 
+            while line[i] != b';'{
+                i += 1;
             }
             
-            let _ = sender.send(map.clone());
-            drop(sender);
-        });
-    }
-
-    for l in reader.lines(){
-        let _ = data_sender.try_send(l);
-    };
-    drop(data_sender);
-
-    let mut map: Answer = Answer::with_capacity_and_hasher(10000, Default::default());
-    for _ in 0..CPU_COUNT {
-        let partial = answer_receiver.recv().unwrap();
-        for key in partial.keys() {
-            let station = map.entry(key.to_string()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
-            let partial_station = partial[key];
-
-            station[0] = station[0].min(partial_station[0]);
-            station[1] = station[1].max(partial_station[1]);
-            station[2] = station[2] + partial_station[2];
-            station[3] = station[3] + partial_station[3];
+            let v = parse_measure(&line, i);
+            // let liner = line.unwrap();
+            // let l: Vec<&str> = liner.split(";").collect();
+            // let v = parse_measure(l[1]);
+            
+            let station = map.entry(line[0..i].to_vec()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
+            station[0] = station[0].min(v);
+            station[1] = station[1].max(v);
+            station[2] = station[2] + v;
+            station[3] = station[3] + 1;
         }
-    }
-    for key in map.keys().sorted() {
-        let [min, max, sum, count] = map[key];
-        let mean = (sum as f32) / (count as f32) /10.0;
-        println!("{key}={:.1}/{:.1}/{mean:.1}", min as f32 /10.0, max as f32 /10.0);
-    }
+        
+        for key in map.keys().sorted() {
+            let [min, max, sum, count] = map[key];
+            let mean = (sum as f32) / (count as f32) /10.0;
+            // let name = key.;
+            println!("{:?}={:.1}/{:.1}/{mean:.1}", key, min as f32 /10.0, max as f32 /10.0);
+        }
+        let _ = answer_sender.send(0);
+        drop(answer_sender);
+    });
+    
+    let mut buf = vec![];
+    let _a = reader.read_until(b'\n', &mut buf);
+    for l in reader.read_until(b'\n', &mut buf) {
+        println!("{:?}", l);
+        let _ = data_sender.send(buf.clone());
+    };
+    // let read_until = reader.read_until(b'\n', &mut &buf);
+
+    drop(data_sender);
+    let _ = answer_receiver.recv();
 }
