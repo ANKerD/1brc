@@ -32,4 +32,8 @@ cargo run --bin create_measurements 1000000000 data/1b.txt
 
 Simply read line-by-line iteratively and use a map to keep track of each station individually. No concurrency and no clever tricks, just set the base line. 
 
-### TODO: Implement the solution
+### How to run
+
+```
+cargo run --bin 1_naive_implementation data/1b.txt
+```
