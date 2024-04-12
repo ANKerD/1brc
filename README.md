@@ -174,3 +174,15 @@ To avoid floating point operations I converted the measures to int since by defi
 ```
 ./src/bin/4_better_ds/run-all.sh 2>/dev/null
 ```
+
+## 5. Thread pool
+
+It's time to think about all the CPUs the machine has to offer. I'll start creating a worker pool for each CPU and leave the main thread read rows in chunks;
+
+First attempt was to try builtin `sync::mpsc` but it has so many sharps edges to the point I gave up and decided to try crossbeam channel as thread communication solution.
+
+### How to run
+
+```
+./src/bin/5_threads_pool/run-all.sh 2>/dev/null
+```

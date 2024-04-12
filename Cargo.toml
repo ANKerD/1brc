@@ -10,6 +10,7 @@ name = "create_measurements"
 path = "src/bin/create_measurements/main.rs"
 
 [dependencies]
+crossbeam-channel = "0.5.12"
 fxhash = "0.2.1"
 itertools = "0.12.1"
 mimalloc = "0.1.39"
