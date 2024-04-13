@@ -11,10 +11,6 @@ use crossbeam_channel::{bounded, Receiver, Sender};
 const THREAD_COUNT: usize = 16;
 const CHUNK_SIZE: u64 = 1024 * 1024 * 4;
 
-// fn v8_as_text(arr: &Vec<u8>) {
-//     let _ = stdout().write(arr);
-// }
-
 type Answer = FxHashMap::<Vec<u8>, [i64; 4]>;
 
 fn main() {
@@ -117,10 +113,5 @@ fn main() {
         let mean = (sum as f32) / (count as f32) /10.0;
         let _ = stdout().write(key);
         println!("={:.1}/{:.1}/{mean:.1}", min as f32 /10.0, max as f32 /10.0);
-
-        // let mn = i64::abs(sum - mean*count);
-        // let _ = stdout().write(key);
-        // println!("={}.{}/{}.{}/{}.{}", min/10, i64::abs(min%10), max/10,i64::abs(max%10), mean, mn);
-        // println!("{key}={:.1}/{:.1}/{mean:.1}", min as f32 /10.0, max as f32 /10.0);
-    }
+   }
 }
