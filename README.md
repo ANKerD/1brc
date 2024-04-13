@@ -203,9 +203,19 @@ The bottleneck was in a single thread reading and fanning out the lines through 
 | 100m       | 7.51s  | 5.64s      | 3.23s      | 1.85s       | 2.02s       | 2.54s        | 2.06s         | 1.35s  |
 | 1b         | 74.09s | 32.94s     | 31.81s     | 17.32s      | 16.88s      | 16.88s       | 19.79s        | 15.99s |
 
+While still using the same idea, I changed my implementation to have the threads reading the file sequentially instead of partitioning the file. This way I'm able to have more caches hits as sequential regions in the are stored in the CPU registers.
+
+| Input size | old    | 12th cnk=188k |
+|------------|--------|---------------|
+| 1m         | 0.49s  | 0.25s         |
+| 10m        | 0.40s  | 0.34s         |
+| 100m       | 2.02s  | 1.64s         |
+| 1b         | 16.88s | 14.80s        |
 
 ### How to run
 
+The solution was update to take threads count and chunk (in kilobytes) size by param.
+
 ```
-./src/bin/5_multi_thread/run-all.sh 2>/dev/null
+./src/bin/5_multi_thread/run-all.sh 12 188 2>/dev/null
 ```

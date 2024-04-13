@@ -1,6 +1,6 @@
 #[global_allocator]
-// static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+// static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 extern crate fxhash;
 use fxhash::FxHashMap;
@@ -8,22 +8,24 @@ use std::{ env, fs::File, io::{stdout, Read, Seek, SeekFrom, Write}, thread};
 use itertools::Itertools;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-const THREAD_COUNT: usize = 16;
-const CHUNK_SIZE: u64 = 1024 * 1024 * 4;
+const BUFFER_OFFSET: usize = 100;
 
 type Answer = FxHashMap::<Vec<u8>, [i64; 4]>;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     
-    if args.len() != 2 {
+    if args.len() != 4 {
         panic!("Wrong parameters provided")
     }
+
+    let threads_count: usize = args[2].trim().parse::<usize>().unwrap();
+    let chunk_size: usize = 1024 * args[3].trim().parse::<usize>().unwrap() - BUFFER_OFFSET;
     
     let filepath = args[1].trim().to_owned();
     let (answer_sender, answer_receiver): (Sender<Answer>, Receiver<Answer>) = bounded(0);
     
-    for j in 0..THREAD_COUNT {
+    for j in 0..threads_count {
         let fp = filepath.clone();
         let sender = answer_sender.clone();
         let worker = move |thread_id| {
@@ -31,63 +33,65 @@ fn main() {
             
             let mut f = File::open(fp.clone()).unwrap();
             let file_size = f.metadata().unwrap().len() as usize;
-            let start: usize = file_size / THREAD_COUNT * thread_id;
-            let end: usize = if thread_id+1 == THREAD_COUNT{ file_size } else {file_size / THREAD_COUNT * (thread_id+1)};
-            // println!("1. {start} {end} {file_size} {thread_id}");
+            let mut start: usize = chunk_size * thread_id;
+            let mut end: usize = (start + chunk_size).min(file_size);
+            // println!("[{thread_id}] 1. start={start} end={end}");
+            while start  < end && end <= file_size  {
+                let _ = f.seek(SeekFrom::Start(start.try_into().unwrap()));
+                let mut buf = vec![0_u8; chunk_size + BUFFER_OFFSET]; // Add offset
+                let mut index = 0;
             
-            let _ = f.seek(SeekFrom::Start(start.try_into().unwrap())).unwrap();
-            let mut buf = vec![0_u8; CHUNK_SIZE.try_into().unwrap()];
-            let mut cnt = 0;
+                // println!("[{thread_id}] 2. start={start} end={end}");
+                let _ = f.read(&mut buf).unwrap();
 
-            cnt += f.read(&mut buf).unwrap();
-
-            let mut index = 0;
-            if thread_id != 0 {
-                while buf[index] != b'\n' {
+                while start > 0 && buf[index] != b'\n' && start + index < file_size {
                     index += 1;
+                } 
+                if buf[index] == b'\n' {
+                    index += 1
                 }
-                index += 1;
-            }
-            let mut txt_buffer: Vec<u8> = Vec::with_capacity(30);
-            while start + cnt < end {
-                let mut measure: i32 = 0;
-                let mut semicolon = false;
-                let mut neg = false;
-                loop {
-                    let c = buf[index];
-                    // println!("[{thread_id}] index={index} c={c} {}", c as char);
-                    
-                    if c == b';' {
-                        semicolon = true
-                    } else if c == b'-' { 
-                        neg = true;
-                    } else if c == b'.' || c == b'\n' { 
-                    } else if !semicolon {
-                        txt_buffer.push(c);
-                    } else if semicolon {
-                        measure = measure * 10 + (c - b'0') as i32;
-                    } else {
-                        println!("bad state reading c={c}");
+                let mut txt_buffer: Vec<u8> = Vec::with_capacity(30);
+                while start + index < end && end <= file_size || start + index < end +1 && end != file_size {
+                    // println!(" [{thread_id}] 1. start={start} end={end} index={index}");
+                    let mut measure: i32 = 0;
+                    let mut semicolon = false;
+                    let mut neg = false;
+                    loop {
+                        let c = buf[index];
+                        // println!("[{thread_id}] start={start} c={c} {}", c as char);
+                        
+                        if c == b';' {
+                            semicolon = true
+                        } else if c == b'-' { 
+                            neg = true;
+                        } else if c == b'.' || c == b'\n' { 
+                        } else if !semicolon {
+                            txt_buffer.push(c);
+                        } else if semicolon {
+                            measure = measure * 10 + (c - b'0') as i32;
+                        } else {
+                            println!("bad state reading c={c}");
+                        }
+                        index += 1;
+                        if c == b'\n' {break;}
                     }
-                    
-                    index += 1;
-                    
-                    if index >= buf.len() {
-                        cnt += f.read(&mut buf).unwrap();
-                        index = 0;
-                    }
-                    if c == b'\n' {break;}
-                }
-                if neg { measure = -measure; }
+                    if neg { measure = -measure; }
+                    // print!("[{thread_id}] 1. start={start} end={end} index={index} ");
+                    // let _ = stdout().write(&txt_buffer);
+                    // println!(" {measure}");
+                        
+                    let station = map.entry(txt_buffer.clone()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
+                    station[0] = station[0].min(measure as i64);
+                    station[1] = station[1].max(measure as i64);
+                    station[2] = station[2] + measure as i64;
+                    station[3] = station[3] + 1;
+                    txt_buffer.clear();
 
-                // TODO review this clone
-                let station = map.entry(txt_buffer.clone()).or_insert( [i64::MAX, i64::MIN, 0, 0]);
-                station[0] = station[0].min(measure as i64);
-                station[1] = station[1].max(measure as i64);
-                station[2] = station[2] + measure as i64;
-                station[3] = station[3] + 1;
-                txt_buffer.clear()
+                }
+                start = start + threads_count * chunk_size;
+                end = (start + chunk_size).min(file_size);
             }
+            
             sender.send(map).unwrap();
             drop(sender);
         };
@@ -95,7 +99,7 @@ fn main() {
     }
     
     let mut map = Answer::with_capacity_and_hasher(10000, Default::default());
-    for _ in 0..THREAD_COUNT {
+    for _ in 0..threads_count {
         let partial = answer_receiver.recv().unwrap();
         for key in partial.keys() {
             let p = partial[key];
