@@ -1,7 +1,7 @@
 declare -a arr=("10" "100" "1k" "10k" "100k" "1m" "10m" "100m" "1b")
 # declare -a arr=("1m" "10m" "100m" "1b")
 
-solution=5_multi_thread
+solution=6_optmx
 folder=src/bin/$solution/output
 mkdir -p $folder
 

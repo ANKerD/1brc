@@ -219,3 +219,7 @@ The solution was update to take threads count and chunk (in kilobytes) size by p
 ```
 ./src/bin/5_multi_thread/run-all.sh 12 188 2>/dev/null
 ```
+
+## 6. Custom hashmap
+
+Implementing my own HashMap, using a double hash approach to avoid collisions and using an array instead of a hashmap was tough, took too many hours and still was buggy causing seg faults with every input bigger than 1k lines. 
