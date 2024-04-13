@@ -4,13 +4,12 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate fxhash;
 use fxhash::FxHashMap;
-use memmap::MmapOptions;
 use std::{ env, fs::File, io::{stdout, Read, Seek, SeekFrom, Write}, thread};
 use itertools::Itertools;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
 const THREAD_COUNT: usize = 16;
-const CHUNK_SIZE: usize = 1024 * 1024 * 4;
+const CHUNK_SIZE: u64 = 1024 * 1024 * 4;
 
 type Answer = FxHashMap::<Vec<u8>, [i64; 4]>;
 
@@ -24,43 +23,39 @@ fn main() {
     let filepath = args[1].trim().to_owned();
     let (answer_sender, answer_receiver): (Sender<Answer>, Receiver<Answer>) = bounded(0);
     
-    let f = File::open(filepath.clone()).unwrap();
-    let mmap = unsafe { MmapOptions::new().map(&f).unwrap() };
-    let file_size = mmap.len() as usize;
-    
-    let (chunk_sender, chunk_receiver): (Sender<(usize, usize)>, Receiver<(usize, usize)>) = bounded(0);
-    let mut start: usize = 0;
-    let mut end: usize = (start + CHUNK_SIZE).min(file_size);
-    while start < mmap.len() {
-        while end < file_size && mmap[end] != b'\n' {
-            end += 1;
-        }
-        chunk_sender.send((start, end)).unwrap();
-        start = end + 1;
-    }
-    drop(chunk_sender);
-
     for j in 0..THREAD_COUNT {
+        let fp = filepath.clone();
         let sender = answer_sender.clone();
-        let receiver = chunk_receiver.clone();
-        let mmap = unsafe { MmapOptions::new().map(&f).unwrap() };
-        let worker = move |_thread_id| {
+        let worker = move |thread_id| {
             let mut map = Answer::with_capacity_and_hasher(10000, Default::default());
-            let (mut start, end);
-            match receiver.recv() {
-                Ok(chunk) => {
-                    (start, end) = chunk;
+            
+            let mut f = File::open(fp.clone()).unwrap();
+            let file_size = f.metadata().unwrap().len() as usize;
+            let start: usize = file_size / THREAD_COUNT * thread_id;
+            let end: usize = if thread_id+1 == THREAD_COUNT{ file_size } else {file_size / THREAD_COUNT * (thread_id+1)};
+            // println!("1. {start} {end} {file_size} {thread_id}");
+            
+            let _ = f.seek(SeekFrom::Start(start.try_into().unwrap())).unwrap();
+            let mut buf = vec![0_u8; CHUNK_SIZE.try_into().unwrap()];
+            let mut cnt = 0;
+
+            cnt += f.read(&mut buf).unwrap();
+
+            let mut index = 0;
+            if thread_id != 0 {
+                while buf[index] != b'\n' {
+                    index += 1;
                 }
-                Err(_) => return
+                index += 1;
             }
             let mut txt_buffer: Vec<u8> = Vec::with_capacity(30);
-            while start < end {
+            while start + cnt < end {
                 let mut measure: i32 = 0;
                 let mut semicolon = false;
                 let mut neg = false;
                 loop {
-                    let c = mmap[start];
-                    // println!("[{thread_id}] start={start} c={c} {}", c as char);
+                    let c = buf[index];
+                    // println!("[{thread_id}] index={index} c={c} {}", c as char);
                     
                     if c == b';' {
                         semicolon = true
@@ -75,7 +70,12 @@ fn main() {
                         println!("bad state reading c={c}");
                     }
                     
-                    start += 1;
+                    index += 1;
+                    
+                    if index >= buf.len() {
+                        cnt += f.read(&mut buf).unwrap();
+                        index = 0;
+                    }
                     if c == b'\n' {break;}
                 }
                 if neg { measure = -measure; }
