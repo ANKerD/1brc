@@ -13,6 +13,7 @@ path = "src/bin/create_measurements/main.rs"
 crossbeam-channel = "0.5.12"
 fxhash = "0.2.1"
 itertools = "0.12.1"
+memmap = "0.7.0"
 mimalloc = "0.1.39"
 
 [profile.release]
